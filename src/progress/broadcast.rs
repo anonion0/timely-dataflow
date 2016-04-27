@@ -5,23 +5,28 @@ use progress::count_map::CountMap;
 use timely_communication::Allocate;
 use {Push, Pull};
 
-// TODO : Extend ProgressVec<T> to contain a source worker id and a sequence number.
-
-
 /// A list of progress updates corresponding to `((child_scope, [in/out]_port, timestamp), delta)`
 pub type ProgressVec<T> = Vec<((usize, usize, T), i64)>;
+/// A progress update message consisting of source worker id, sequence number and lists of 
+/// message and internal updates
+pub type ProgressMsg<T> = (usize, usize, ProgressVec<T>, ProgressVec<T>);
 
 /// Manages broadcasting of progress updates to and receiving updates from workers.
 pub struct Progcaster<T:Timestamp> {
-    pushers: Vec<Box<Push<(ProgressVec<T>, ProgressVec<T>)>>>,
-    puller: Box<Pull<(ProgressVec<T>, ProgressVec<T>)>>,
+    pushers: Vec<Box<Push<ProgressMsg<T>>>>,
+    puller: Box<Pull<ProgressMsg<T>>>,
+    /// Source worker index
+    source: usize,
+    /// Sequence number counter
+    counter: usize,
 }
 
 impl<T:Timestamp+Send> Progcaster<T> {
     /// Creates a new `Progcaster` using a channel from the supplied allocator.
     pub fn new<A: Allocate>(allocator: &mut A) -> Progcaster<T> {
         let (pushers, puller) = allocator.allocate();
-        Progcaster { pushers: pushers, puller: puller }
+        let worker = allocator.index();
+        Progcaster { pushers: pushers, puller: puller, source: worker, counter: 0 }
     }
 
     // TODO : puller.pull() forcibly decodes, whereas we would be just as happy to read data from
@@ -39,18 +44,46 @@ impl<T:Timestamp+Send> Progcaster<T> {
         // assert!(internal.iter().all(|x| x.1 != 0));
         if self.pushers.len() > 1 {  // if the length is one, just return the updates...
             if messages.len() > 0 || internal.len() > 0 {
+
+                ::logging::log(&::logging::PROGRESS, ::logging::ProgressEvent {
+                    is_send: true,
+                    source: self.source,
+                    seq_no: self.counter,
+                    // TODO: fill with additional data
+                    addr: Vec::new(),
+                    messages: Vec::new(),
+                    internal: Vec::new(),
+                });
+
                 for pusher in self.pushers.iter_mut() {
                     // TODO : Feels like an Arc might be not horrible here... less allocation,
                     // TODO : at least, but more "contention" in the deallocation.
-                    pusher.push(&mut Some((messages.clone().into_inner(), internal.clone().into_inner())));
+                    pusher.push(&mut Some((self.source,
+                                           self.counter,
+                                           messages.clone().into_inner(),
+                                           internal.clone().into_inner()
+                                          ))
+                                );
                 }
+                self.counter += 1;
 
                 messages.clear();
                 internal.clear();
             }
 
             // TODO : Could take ownership, and recycle / reuse for next broadcast ...
-            while let Some((ref recv_messages, ref recv_internal)) = *self.puller.pull() {
+            while let Some((source, seq_no, ref recv_messages, ref recv_internal)) = *self.puller.pull() {
+
+                ::logging::log(&::logging::PROGRESS, ::logging::ProgressEvent {
+                    is_send: false,
+                    source: source,
+                    seq_no: seq_no,
+                    // TODO: fill with additional data
+                    addr: Vec::new(),
+                    messages: Vec::new(),
+                    internal: Vec::new(),
+                });
+
                 for &(ref update, delta) in recv_messages {
                     messages.update(update, delta);
                 }

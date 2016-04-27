@@ -158,7 +158,7 @@ pub struct OperatesEvent {
     pub name: String,
 }
 
-unsafe_abomonate!(OperatesEvent : addr, name);
+unsafe_abomonate!(OperatesEvent : id, addr, name);
 
 #[derive(Debug, Clone)]
 /// The creation of a channel between operators.
@@ -180,6 +180,10 @@ unsafe_abomonate!(ChannelsEvent : id, scope_addr, source, target);
 pub struct ProgressEvent {
     /// `true` if the event is a send, and `false` if it is a receive.
     pub is_send: bool,
+    /// Source worker index.
+    pub source: usize,
+    /// Message sequence number.
+    pub seq_no: usize,
     /// Sequence of nested scope identifiers indicating the path from the root to this instance.
     pub addr: Vec<usize>,
     /// List of message updates, containing Target descriptor, timestamp as string, and delta.
@@ -188,7 +192,7 @@ pub struct ProgressEvent {
     pub internal: Vec<(usize, usize, String, i64)>,
 }
 
-unsafe_abomonate!(ProgressEvent : is_send, addr, messages, internal);
+unsafe_abomonate!(ProgressEvent : is_send, source, seq_no, addr, messages, internal);
 
 #[derive(Debug, Clone)]
 /// Message send or receive event
