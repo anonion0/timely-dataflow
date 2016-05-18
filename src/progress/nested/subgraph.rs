@@ -589,8 +589,8 @@ impl<TOuter: Timestamp, TInner: Timestamp> Subgraph<TOuter, TInner> {
 
 
     pub fn new_from<A: Allocate>(allocator: &mut A, index: usize, mut path: Vec<usize>) -> Subgraph<TOuter, TInner> {
-        let progcaster = Progcaster::new(allocator);
         path.push(index);
+        let progcaster = Progcaster::new(allocator, &path);
 
         let children = vec![PerOperatorState::empty(path.clone())];
 
