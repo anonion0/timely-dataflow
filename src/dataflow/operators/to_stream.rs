@@ -85,10 +85,10 @@ impl<T:Timestamp, D: Data, I: Iterator<Item=D>> Operate<T> for Operator<T, D, I>
             else {
 
                 self.output.cease();
-                self.output.inner().pull_progress(&mut messages_produced[0]);
                 frontier_progress[0].update(&Default::default(), -1);
                 self.iterator = None;
             }
+            self.output.inner().pull_progress(&mut messages_produced[0]);
         }
 
         false
