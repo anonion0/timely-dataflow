@@ -5,7 +5,7 @@ This project is an extended and more modular implementation of timely dataflow i
 
 Be sure to read the [documentation for timely dataflow](http://frankmcsherry.github.io/timely-dataflow). It is a work in progress, but mostly improving.
 
-The [timely dataflow wiki](https://github.com/frankmcsherry/timely-dataflow/wiki) has more long-form text, introducing programming and explaining concepts in more detail. There is also a series of blog posts ([part 1](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-14.md), [part 2](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-18.md), [part 3](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-21.md)) introducing timely dataflow a different way.
+The [timely dataflow wiki](https://github.com/frankmcsherry/timely-dataflow/wiki) has more long-form text, introducing programming and explaining concepts in more detail. There is also a series of blog posts ([part 1](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-14.md), [part 2](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-18.md), [part 3](https://github.com/frankmcsherry/blog/blob/master/posts/2015-09-21.md)) introducing timely dataflow in a different way.
 
 # An example
 
@@ -56,20 +56,17 @@ For a more involved example, consider the very similar (but more explicit) [exam
 
 ```rust
 extern crate timely;
-extern crate timely_communication;
 
 use timely::dataflow::*;
 use timely::dataflow::operators::*;
-use timely::progress::timestamp::RootTimestamp;
-use timely_communication::Allocate;
 
 fn main() {
     // initializes and runs a timely dataflow computation
-    timely::execute_from_args(std::env::args(), |computation| {
+    timely::execute_from_args(std::env::args(), |root| {
         // create a new input, exchange data, and inspect its output
-        let (mut input, probe) = computation.scoped(move |builder| {
-            let index = builder.index();
-            let (input, stream) = builder.new_input();
+        let (mut input, probe) = root.scoped(move |scope| {
+            let index = scope.index();
+            let (input, stream) = scope.new_input();
             let probe = stream.exchange(|x| *x)
                               .inspect(move |x| println!("worker {}:\thello {}", index, x))
                               .probe().0;
@@ -80,15 +77,47 @@ fn main() {
         for round in 0..10 {
             input.send(round);
             input.advance_to(round + 1);
-            while probe.le(&RootTimestamp::new(round)) {
-                computation.step();
+            while probe.lt(input.time()) {
+                root.step();
             }
         }
     }).unwrap();
 }
 ```
 
-This example does a fair bit more, to show off more what timely can do for you. The example first builds the dataflow computation in the `// create a new input, ...` block, and then supplies the computation with data and drives it in the `// introduce data and watch!` block. It shuffles the input data across available workers, and has each report its index and the data it sees.
+This example does a fair bit more, to show off more of what timely can do for you. 
+
+We first build a dataflow graph creating an input stream (with `new_input`), whose output we `exchange` to drive records between workers (using the data itself to indicate which worker to route to). We `inspect` the data and print the worker index to indicate which worker received which data, and then `probe` the result so that each worker can see when the all of a given round of data has been processed.
+
+We then drive the computation by repeatedly introducing rounds of data, where the `round` itself is used as the data. In each round, each worker introduces the same data, and then repeatedly takes dataflow steps until the `probe` reveals that all workers have processed all work for that epoch, at which point the computation proceeds.
+
+With two workers, the output looks like
+```
+% cargo run --example hello -- -w2
+Running `target/debug/examples/hello -w2`
+worker 0:   hello 0
+worker 0:   hello 0
+worker 1:   hello 1
+worker 1:   hello 1
+worker 0:   hello 2
+worker 0:   hello 2
+worker 1:   hello 3
+worker 1:   hello 3
+worker 0:   hello 4
+worker 0:   hello 4
+worker 1:   hello 5
+worker 1:   hello 5
+worker 0:   hello 6
+worker 0:   hello 6
+worker 1:   hello 7
+worker 1:   hello 7
+worker 0:   hello 8
+worker 0:   hello 8
+worker 1:   hello 9
+worker 1:   hello 9
+```
+
+Note that despite each worker introducing `(0..10)`, each element is routed to a specific worker, as we intended.
 
 # Execution
 
@@ -143,7 +172,7 @@ The timely communication layer currently discards most buffers it moves through 
 
 ## Support for non-serializable types
 
-The communication layer is based on a type `Content<T>` which can be backed by typed or binary data. Consequently, it requires that the type it supports be serializable, because it needs to have logic for the case that the data is binary, even if this case is not used. It seems like the `Stream` type should be extendable to be parametric in the type of storage used for the data, so that we can express the fact that some types are not serializable and that this is ok. 
+The communication layer is based on a type `Content<T>` which can be backed by typed or binary data. Consequently, it requires that the type it supports be serializable, because it needs to have logic for the case that the data is binary, even if this case is not used. It seems like the `Stream` type should be extendable to be parametric in the type of storage used for the data, so that we can express the fact that some types are not serializable and that this is ok.
 
 This would allow us to safely pass Rc<T> types around, as long as we use the `Pipeline` parallelization contract.
 

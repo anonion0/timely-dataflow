@@ -10,8 +10,9 @@
 
 pub use self::enterleave::{Enter, EnterAt, Leave};
 pub use self::unary::Unary;
-pub use self::queue::*;
+// pub use self::queue::*;
 pub use self::input::Input;
+pub use self::unordered_input::UnorderedInput;
 pub use self::feedback::{LoopVariable, ConnectLoop};
 pub use self::concat::{Concat, Concatenate};
 pub use self::partition::Partition;
@@ -26,10 +27,14 @@ pub use self::probe::Probe;
 pub use self::to_stream::ToStream;
 pub use self::capture::Capture;
 
+pub use self::reclock::Reclock;
+pub use self::count::Accumulate;
+
 pub mod enterleave;
 pub mod unary;
-pub mod queue;
+// pub mod queue;
 pub mod input;
+pub mod unordered_input;
 pub mod feedback;
 pub mod concat;
 pub mod partition;
@@ -45,6 +50,9 @@ pub mod to_stream;
 pub mod capture;
 
 pub mod aggregation;
+
+pub mod reclock;
+pub mod count;
 
 // keep the handle constructors private
 mod handles;

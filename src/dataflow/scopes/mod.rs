@@ -1,7 +1,5 @@
 //! Hierarchical organization of timely dataflow graphs.
-//!
 
-use std::rc::Rc;
 use std::cell::RefCell;
 
 use progress::{Timestamp, Operate, Subgraph};
@@ -70,16 +68,19 @@ pub trait Scope : Allocate+Clone {
     /// ```
     #[inline]
     fn scoped<T: Timestamp, R, F:FnOnce(&mut Child<Self, T>)->R>(&mut self, func: F) -> R {
-        let subscope = Rc::new(RefCell::new(self.new_subscope()));
-        let mut builder = Child {
-            subgraph: subscope,
-            parent: self.clone(),
+        let subscope = RefCell::new(self.new_subscope());
+
+        let result = {
+            let mut builder = Child {
+                subgraph: &subscope,
+                parent: self.clone(),
+            };
+            func(&mut builder)
         };
 
-        let result = func(&mut builder);
-        let index = builder.subgraph.borrow().index;
-        // println!("adding subgraph with index: {}", index);
-        self.add_operator_with_index(builder.subgraph, index);
+        let index = subscope.borrow().index;
+        self.add_operator_with_index(subscope.into_inner(), index);
+
         result
     }
 }
