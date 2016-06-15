@@ -114,6 +114,7 @@ pub fn initialize<A: Allocate>(root: &mut Root<A>) {
     CHANNELS.with(|x| x.set(File::create(format!("logs/channels-{}.abom", root.index())).unwrap()));
     MESSAGES.with(|x| x.set(File::create(format!("logs/messages-{}.abom", root.index())).unwrap()));
     PROGRESS.with(|x| x.set(File::create(format!("logs/progress-{}.abom", root.index())).unwrap()));
+    PUSH_PROGRESS.with(|x| x.set(File::create(format!("logs/push_progress-{}.abom", root.index())).unwrap()));
     SCHEDULE.with(|x| x.set(File::create(format!("logs/schedule-{}.abom", root.index())).unwrap()));
     GUARDED_MESSAGE.with(|x| x.set(File::create(format!("logs/guarded_message-{}.abom", root.index())).unwrap()));
     GUARDED_PROGRESS.with(|x| x.set(File::create(format!("logs/guarded_progress-{}.abom", root.index())).unwrap()));
@@ -133,6 +134,7 @@ pub fn flush_logs() {
     OPERATES.with(|x| x.flush());
     CHANNELS.with(|x| x.flush());
     PROGRESS.with(|x| x.flush());
+    PUSH_PROGRESS.with(|x| x.flush());
     MESSAGES.with(|x| x.flush());
     SCHEDULE.with(|x| x.flush());
     GUARDED_MESSAGE.with(|x| x.flush());
@@ -142,6 +144,7 @@ pub fn flush_logs() {
 thread_local!(pub static OPERATES: EventStreamLogger<OperatesEvent, File> = EventStreamLogger::new());
 thread_local!(pub static CHANNELS: EventStreamLogger<ChannelsEvent, File> = EventStreamLogger::new());
 thread_local!(pub static PROGRESS: EventStreamLogger<ProgressEvent, File> = EventStreamLogger::new());
+thread_local!(pub static PUSH_PROGRESS: EventStreamLogger<PushProgressEvent, File> = EventStreamLogger::new());
 thread_local!(pub static MESSAGES: EventStreamLogger<MessagesEvent, File> = EventStreamLogger::new());
 thread_local!(pub static SCHEDULE: EventStreamLogger<ScheduleEvent, File> = EventStreamLogger::new());
 thread_local!(pub static GUARDED_MESSAGE: EventStreamLogger<bool, File> = EventStreamLogger::new());
@@ -193,6 +196,15 @@ pub struct ProgressEvent {
 }
 
 unsafe_abomonate!(ProgressEvent : is_send, source, seq_no, addr, messages, internal);
+
+#[derive(Debug, Clone)]
+/// External progress pushed onto an operator
+pub struct PushProgressEvent {
+    /// Worker-unique operator identifier
+    pub op_id: usize,
+}
+
+unsafe_abomonate!(PushProgressEvent: op_id);
 
 #[derive(Debug, Clone)]
 /// Message send or receive event

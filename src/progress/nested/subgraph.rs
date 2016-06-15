@@ -824,6 +824,11 @@ impl<T: Timestamp> PerOperatorState<T> {
 
         {
             let changes = &mut self.external_buffer;
+            if changes.iter().any(|ref c| c.len() > 0) {
+                ::logging::log(&::logging::PUSH_PROGRESS, ::logging::PushProgressEvent {
+                    op_id: self.id,
+                });
+            }
             self.operator.as_mut().map(|x| x.push_external_progress(changes));
             if changes.iter().any(|x| x.len() > 0) {
                 println!("changes not consumed by {:?}", self.name);
