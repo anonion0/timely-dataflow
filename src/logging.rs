@@ -116,6 +116,7 @@ pub fn initialize<A: Allocate>(root: &mut Root<A>) {
     PROGRESS.with(|x| x.set(File::create(format!("logs/progress-{}.abom", root.index())).unwrap()));
     PUSH_PROGRESS.with(|x| x.set(File::create(format!("logs/push_progress-{}.abom", root.index())).unwrap()));
     SCHEDULE.with(|x| x.set(File::create(format!("logs/schedule-{}.abom", root.index())).unwrap()));
+    APPLICATION.with(|x| x.set(File::create(format!("logs/application-{}.abom", root.index())).unwrap()));
     GUARDED_MESSAGE.with(|x| x.set(File::create(format!("logs/guarded_message-{}.abom", root.index())).unwrap()));
     GUARDED_PROGRESS.with(|x| x.set(File::create(format!("logs/guarded_progress-{}.abom", root.index())).unwrap()));
 
@@ -137,6 +138,7 @@ pub fn flush_logs() {
     PUSH_PROGRESS.with(|x| x.flush());
     MESSAGES.with(|x| x.flush());
     SCHEDULE.with(|x| x.flush());
+    APPLICATION.with(|x| x.flush());
     GUARDED_MESSAGE.with(|x| x.flush());
     GUARDED_PROGRESS.with(|x| x.flush());
 }
@@ -147,6 +149,7 @@ thread_local!(pub static PROGRESS: EventStreamLogger<ProgressEvent, File> = Even
 thread_local!(pub static PUSH_PROGRESS: EventStreamLogger<PushProgressEvent, File> = EventStreamLogger::new());
 thread_local!(pub static MESSAGES: EventStreamLogger<MessagesEvent, File> = EventStreamLogger::new());
 thread_local!(pub static SCHEDULE: EventStreamLogger<ScheduleEvent, File> = EventStreamLogger::new());
+thread_local!(pub static APPLICATION: EventStreamLogger<ApplicationEvent, File> = EventStreamLogger::new());
 thread_local!(pub static GUARDED_MESSAGE: EventStreamLogger<bool, File> = EventStreamLogger::new());
 thread_local!(pub static GUARDED_PROGRESS: EventStreamLogger<bool, File> = EventStreamLogger::new());
 
@@ -267,3 +270,14 @@ pub struct ScheduleEvent {
 }
 
 unsafe_abomonate!(ScheduleEvent : id, start_stop);
+
+#[derive(Debug, Clone)]
+/// Application-defined code startor stop
+pub struct ApplicationEvent {
+    /// Unique event type identifier
+    pub id: usize,
+    /// True when activity begins, false when it stops 
+    pub is_start: bool,
+}
+
+unsafe_abomonate!(ApplicationEvent: id, is_start);
