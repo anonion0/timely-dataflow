@@ -54,7 +54,7 @@ impl<'a, G: Scope, T: Timestamp> Scope for Child<'a, G, T> {
 impl<'a, G: Scope, T: Timestamp> Allocate for Child<'a, G, T> {
     fn index(&self) -> usize { self.parent.index() }
     fn peers(&self) -> usize { self.parent.peers() }
-    fn allocate<D: Data>(&mut self) -> (Vec<Box<Push<D>>>, Box<Pull<D>>) {
+    fn allocate<D: Data>(&mut self) -> (Vec<Box<Push<D>>>, Box<Pull<D>>, Option<usize>) {
         self.parent.allocate()
     }
 }

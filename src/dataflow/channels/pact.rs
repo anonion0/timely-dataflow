@@ -20,8 +20,8 @@ impl<T: 'static, D: 'static> ParallelizationContract<T, D> for Pipeline {
         // ignore &mut A and use thread allocator
         let (mut pushers, puller) = Thread::new::<Message<T, D>>();
 
-        (Box::new(Pusher::new(pushers.pop().unwrap(), allocator.index(), allocator.index(), identifier)),
-         Box::new(Puller::new(puller, allocator.index(), identifier)))
+        (Box::new(Pusher::new(pushers.pop().unwrap(), allocator.index(), allocator.index(), identifier, None)),
+         Box::new(Puller::new(puller, allocator.index(), identifier, None)))
     }
 }
 
@@ -41,24 +41,26 @@ impl<D, F: Fn(&D)->u64> Exchange<D, F> {
 // would like to get the vectors it sends back, so that they can be re-used if possible.
 impl<T: Eq+Data+Abomonation, D: Data+Abomonation, F: Fn(&D)->u64+'static> ParallelizationContract<T, D> for Exchange<D, F> {
     fn connect<A: Allocate>(self, allocator: &mut A, identifier: usize) -> (Box<Push<(T, Content<D>)>>, Box<Pull<(T, Content<D>)>>) {
-        let (senders, receiver) = allocator.allocate::<Message<T, D>>();
-        let senders = senders.into_iter().enumerate().map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier)).collect::<Vec<_>>();
-        (Box::new(ExchangeObserver::new(senders, self.hash_func)), Box::new(Puller::new(receiver, allocator.index(), identifier)))
+        let (senders, receiver, comm_chan) = allocator.allocate::<Message<T, D>>();
+        let senders = senders.into_iter().enumerate().map(|(i,x)| Pusher::new(x, allocator.index(), i, identifier, comm_chan)).collect::<Vec<_>>();
+        (Box::new(ExchangeObserver::new(senders, self.hash_func)), Box::new(Puller::new(receiver, allocator.index(), identifier, comm_chan)))
     }
 }
 
 pub struct Pusher<T, D> {
     pusher: Box<Push<Message<T, D>>>,
     channel: usize,
+    comm_channel: Option<usize>,
     counter: usize,
     source: usize,
     target: usize,
 }
 impl<T, D> Pusher<T, D> {
-    pub fn new(pusher: Box<Push<Message<T, D>>>, source: usize, target: usize, channel: usize) -> Pusher<T, D> {
+    pub fn new(pusher: Box<Push<Message<T, D>>>, source: usize, target: usize, channel: usize, comm_channel: Option<usize>) -> Pusher<T, D> {
         Pusher {
             pusher: pusher,
             channel: channel,
+            comm_channel: comm_channel,
             counter: 0,
             source: source,
             target: target,
@@ -73,6 +75,7 @@ impl<T, D> Push<(T, Content<D>)> for Pusher<T, D> {
             ::logging::log(&::logging::MESSAGES, ::logging::MessagesEvent {
                 is_send: true,
                 channel: self.channel,
+                comm_channel: self.comm_channel,
                 source: self.source,
                 target: self.target,
                 seq_no: self.counter,
@@ -94,14 +97,16 @@ pub struct Puller<T, D> {
     puller: Box<Pull<Message<T, D>>>,
     current: Option<(T, Content<D>)>,
     channel: usize,
+    comm_channel: Option<usize>,
     counter: usize,
     index: usize,
 }
 impl<T, D> Puller<T, D> {
-    pub fn new(puller: Box<Pull<Message<T, D>>>, index: usize, channel: usize) -> Puller<T, D> {
+    pub fn new(puller: Box<Pull<Message<T, D>>>, index: usize, channel: usize, comm_channel: Option<usize>) -> Puller<T, D> {
         Puller {
             puller: puller,
             channel: channel,
+            comm_channel: comm_channel,
             current: None,
             counter: 0,
             index: index,
@@ -121,6 +126,7 @@ impl<T, D> Pull<(T, Content<D>)> for Puller<T, D> {
             ::logging::log(&::logging::MESSAGES, ::logging::MessagesEvent {
                 is_send: false,
                 channel: self.channel,
+                comm_channel: self.comm_channel,
                 source: message.from,
                 target: self.index,
                 seq_no: message.seq,

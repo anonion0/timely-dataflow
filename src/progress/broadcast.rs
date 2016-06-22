@@ -21,15 +21,18 @@ pub struct Progcaster<T:Timestamp> {
     counter: usize,
     /// Sequence of nested scope identifiers indicating the path from the root to this subgraph
     addr: Vec<usize>,
+    /// Communication channel identifier
+    comm_channel: Option<usize>,
 }
 
 impl<T:Timestamp+Send> Progcaster<T> {
     /// Creates a new `Progcaster` using a channel from the supplied allocator.
     pub fn new<A: Allocate>(allocator: &mut A, path: &Vec<usize>) -> Progcaster<T> {
-        let (pushers, puller) = allocator.allocate();
+        let (pushers, puller, chan) = allocator.allocate();
         let worker = allocator.index();
         let addr = path.clone();
-        Progcaster { pushers: pushers, puller: puller, source: worker, counter: 0, addr: addr }
+        Progcaster { pushers: pushers, puller: puller, source: worker,
+                     counter: 0, addr: addr, comm_channel: chan }
     }
 
     // TODO : puller.pull() forcibly decodes, whereas we would be just as happy to read data from
@@ -51,6 +54,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 ::logging::log(&::logging::PROGRESS, ::logging::ProgressEvent {
                     is_send: true,
                     source: self.source,
+                    comm_channel: self.comm_channel,
                     seq_no: self.counter,
                     addr: self.addr.clone(),
                     // TODO: fill with additional data
@@ -80,6 +84,7 @@ impl<T:Timestamp+Send> Progcaster<T> {
                 ::logging::log(&::logging::PROGRESS, ::logging::ProgressEvent {
                     is_send: false,
                     source: source,
+                    comm_channel: self.comm_channel,
                     seq_no: seq_no,
                     addr: self.addr.clone(),
                     // TODO: fill with additional data

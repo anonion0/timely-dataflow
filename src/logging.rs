@@ -188,6 +188,8 @@ pub struct ProgressEvent {
     pub is_send: bool,
     /// Source worker index.
     pub source: usize,
+    /// Communication channel identifier
+    pub comm_channel: Option<usize>,
     /// Message sequence number.
     pub seq_no: usize,
     /// Sequence of nested scope identifiers indicating the path from the root to this instance.
@@ -216,6 +218,8 @@ pub struct MessagesEvent {
     pub is_send: bool,
     /// Channel identifier
     pub channel: usize,
+    /// Communication channel identifier
+    pub comm_channel: Option<usize>,
     /// Source worker index.
     pub source: usize,
     /// Target worker index.
