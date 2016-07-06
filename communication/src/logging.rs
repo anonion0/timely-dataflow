@@ -23,13 +23,15 @@ fn get_precise_time_ns() -> u64 {
 }
 
 pub fn initialize(process: usize, name: &str, id: usize) {
-    COMMUNICATION.with(|x| x.set(File::create(format!("logs/communication-{}-{}-{}.abom", process, name, id)).unwrap()));
-    unsafe {
-        precise_time_ns_delta = Some({
-            let wall_time = time::get_time();
-            let wall_time_ns = wall_time.nsec as i64 + wall_time.sec * 1000000000;
-            time::precise_time_ns() as i64 - wall_time_ns
-        });
+    if cfg!(feature = "logging") {
+        COMMUNICATION.with(|x| x.set(File::create(format!("logs/communication-{}-{}-{}.abom", process, name, id)).unwrap()));
+        unsafe {
+            precise_time_ns_delta = Some({
+                let wall_time = time::get_time();
+                let wall_time_ns = wall_time.nsec as i64 + wall_time.sec * 1000000000;
+                time::precise_time_ns() as i64 - wall_time_ns
+            });
+        }
     }
 }
 
@@ -54,41 +56,45 @@ pub struct CommunicationEvent {
 unsafe_abomonate!(CommunicationEvent);
 
 impl CommunicationEvent {
-    pub fn open_log_readers<P: AsRef<Path>>(path: P) -> Vec<(usize, SimpleLogReader<File>)> {
+    pub fn open_log_readers<P: AsRef<Path>>(path: P) -> Vec<(usize, usize, SimpleLogReader<File>)> {
         let mut readers = Vec::new();
         if let Ok(dir) = fs::read_dir(path) {
-            let files: Vec<_> = dir.flat_map(|e| e.into_iter())
-                                   .filter_map(|e| {
-                                       if let Ok(fname) = e.file_name().into_string() {
-                                           return Some((fname, e.path()))
-                                       }
-                                       None
-                                   })
-                                   .collect();
-            for process_id in 0.. {
-                let prev_length = readers.len();
-                readers.extend(
-                    files.iter()
-                         .filter(|&&(ref fname, _)| {
-                             fname.starts_with(&format!("communication-{}-", process_id)) 
-                                 && fname.ends_with(".abom")
+            readers = dir.flat_map(|e| e.into_iter())
+                         .filter_map(|e| {
+                             // this maps the sender/receiver threads to the same "thread id"
+                             if let Ok(fname) = e.file_name().into_string() {
+                                 let fields: Vec<_>= fname.trim_right_matches(".abom")
+                                                          .split('-').collect();
+                                 if fields.len() != 4 {
+                                     return None;
+                                 }
+                                 if fields[0] != "communication" {
+                                     return None;
+                                 }
+                                 let pid = match fields[1].parse::<usize>() {
+                                     Ok(pid) => pid,
+                                     Err(_) => return None,
+                                 };
+                                 let tid = match fields[3].parse::<usize>() {
+                                     Ok(tid) => tid,
+                                     Err(_) => return None,
+                                 };
+                                 return Some((pid, tid, e.path()))
+                             }
+                             None
                          })
-                         .map(|&(_, ref path)| {
-                             (process_id, SimpleLogReader::new(File::open(path).unwrap()))
-                         })
-                );
-                if readers.len() == prev_length {
-                    break;
-                }
-
-            }
+                         .map(|(pid, tid, path)| {
+                             (pid, tid, SimpleLogReader::new(File::open(path).unwrap()))
+                         }).collect()
         }
         readers
     }
 }
 
 pub fn log<T: Abomonation, W: Write>(logger: &'static ::std::thread::LocalKey<SimpleLogger<W>>, record: T) {
-    logger.with(|x| x.log(record));
+    if cfg!(feature = "logging") {
+        logger.with(|x| x.log(record));
+    }
 }
 
 pub struct SimpleLogger<W: Write> {

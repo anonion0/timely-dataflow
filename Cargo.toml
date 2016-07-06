@@ -18,7 +18,7 @@ path="./communication"
 
 [features]
 default=[]
-logging=[]
+logging=["timely_communication/logging"]
 
 [dependencies]
 abomonation="^0.4.2"
