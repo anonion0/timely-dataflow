@@ -6,7 +6,6 @@ extern crate abomonation;
 use std::cell::RefCell;
 use std::io::Write;
 use std::io::Read;
-use std::io::BufWriter;
 use std::fs::{self, File};
 use std::path::Path;
 use abomonation::Abomonation;
@@ -26,12 +25,11 @@ fn get_precise_time_ns() -> u64 {
 pub fn initialize(process: usize, name: &str, id: usize) {
     if cfg!(feature = "logging") {
         COMMUNICATION.with(|x| x.set(
-                BufWriter::new(
                     File::create(
                         format!("logs/communication-{}-{}-{}.abom", process, name, id))
                     .unwrap()
                 )
-            ));
+            );
         unsafe {
             precise_time_ns_delta = Some({
                 let wall_time = time::get_time();
@@ -144,7 +142,7 @@ impl<W: Write> Drop for SimpleLogger<W> {
     }
 }
 
-thread_local!(pub static COMMUNICATION: SimpleLogger<BufWriter<File>> = SimpleLogger::new());
+thread_local!(pub static COMMUNICATION: SimpleLogger<File> = SimpleLogger::new());
 
 pub struct SimpleLogReader<R: Read> {
     input: R,
