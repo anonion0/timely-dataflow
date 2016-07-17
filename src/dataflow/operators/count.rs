@@ -9,8 +9,9 @@ use dataflow::operators::unary::Unary;
 
 use dataflow::channels::message::Content;
 
+/// Accumulates records within a timestamp.
 pub trait Accumulate<G: Scope, D: Data> {
-    /// Counts the number of records observed at each time.
+    /// Accumulates records within a timestamp.
     ///
     /// #Examples
     ///
@@ -58,16 +59,16 @@ where G::Timestamp: Hash {
 
         let mut accums = HashMap::new();
         self.unary_notify(Pipeline, "Accumulate", vec![], move |input, output, notificator| {
-            while let Some((time, data)) = input.next() {
+            input.for_each(|time, data| {
                 logic(&mut accums.entry(time.time()).or_insert(default.clone()), data);
                 notificator.notify_at(time);
-            }
+            });
 
-            for (time, _count) in notificator {
+            notificator.for_each(|time,_,_| {
                 if let Some(accum) = accums.remove(&time) {
                     output.session(&time).give(accum);
                 }
-            }
+            });
         })
     }
 }
